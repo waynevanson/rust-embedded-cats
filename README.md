@@ -1,7 +1,7 @@
 rust-cats
 =========
 
-Rust project for the _Arduino Mega 2560_.
+Rust project for the ~~_Arduino Mega 2560_~~ Trinket Pro.
 
 ## Build Instructions
 1. Install prerequisites as described in the [`avr-hal` README] (`avr-gcc`, `avr-libc`, `avrdude`, [`ravedude`]).
