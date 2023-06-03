@@ -21,8 +21,8 @@ fn main() -> ! {
     let pins = pins!(peripherals);
 
     // I2C
-    let sda = pins.d20.into_pull_up_input();
-    let sdc = pins.d21.into_pull_up_input();
+    let sda = pins.a4.into_pull_up_input();
+    let sdc = pins.a5.into_pull_up_input();
     let speed = 100_000;
     let mut i2c = I2c::new(peripherals.TWI, sda, sdc, speed);
 
@@ -31,7 +31,7 @@ fn main() -> ! {
 
     // Servo motor
     let timer = Timer0Pwm::new(peripherals.TC0, Prescaler::Prescale64);
-    let mut servo_pin = pins.d4.into_output().into_pwm(&timer);
+    let mut servo_pin = pins.d5.into_output().into_pwm(&timer);
 
     let lux_to_open = 400;
     let lux_to_close = 500;
