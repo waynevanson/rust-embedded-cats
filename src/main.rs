@@ -1,85 +1,71 @@
 #![no_std]
 #![no_main]
 
-mod tsl2561_lux;
-
-use arduino_hal::{simple_pwm::*, *};
+use arduino_hal::{delay_ms, entry, pins, Peripherals};
+use embedded_time::duration::{Hours, Minutes};
 use panic_halt as _;
-use tsl2561_lux::{into_lux, PackageCoefficient};
-use tsl256x::{Gain, IntegrationTime, SlaveAddr, Tsl2561};
 
-fn delay_minutes(minutes: usize) {
-    let minute_ms = 1000 * 60;
-    for _ in 0..minutes {
-        delay_ms(minute_ms)
-    }
-}
+const OPEN: Hours = Hours(8);
+const CLOSE: Hours = Hours(14);
+const DELAY_MINUTES: u8 = 8;
 
+// Adapted from this example
+// https://github.com/Rahix/avr-hal/blob/3c02df9df80e7585765644a87076680a2d99b29a/examples/arduino-uno/src/bin/uno-manual-servo.rs#L22-L47
+//
+// This has been adapted to the correct pin of the Adafruit Trinket Pro,
+// which is easy enough to do because it uses the same microcontroller chip
+// as the Arduino Uno: avr-atmega328p.
 #[entry]
 fn main() -> ! {
     let peripherals = Peripherals::take().unwrap();
     let pins = pins!(peripherals);
 
-    // I2C
-    let sda = pins.a4.into_pull_up_input();
-    let sdc = pins.a5.into_pull_up_input();
-    let speed = 100_000;
-    let mut i2c = I2c::new(peripherals.TWI, sda, sdc, speed);
+    // IMPORTANT - sets a DDR register.
+    pins.d9.into_output();
 
-    // Light sensor
-    let light_sensor = Tsl2561::new(&i2c, SlaveAddr::default().addr()).unwrap();
+    let tc1 = peripherals.TC1;
 
-    // Servo motor
-    let timer = Timer0Pwm::new(peripherals.TC0, Prescaler::Prescale64);
-    let mut servo_pin = pins.d5.into_output().into_pwm(&timer);
-
-    let lux_to_open = 400;
-    let lux_to_close = 500;
-
-    let servo_open = 255;
-    let servo_close = 0;
-
-    let integration_time = IntegrationTime::ms_402;
-    let gain = Gain::Low;
+    // duration, keep track of how far into the day we are,
+    // starting at midnight.
+    let mut duration: Minutes = Minutes(0);
 
     loop {
-        // enabling/disabling in loop to save power.
-        servo_pin.enable();
-        light_sensor.power_on(&mut i2c).unwrap();
+        // Set up PWM that is compatible with servo motor.
+        // This is usually implemented within a struct like `Timer[n]Pwm`,
+        // but we'll apply it manually here.
+        //
+        // servo.enable()
 
-        // set sane defaults
-        light_sensor
-            .config_time_gain(&mut i2c, integration_time, gain)
-            .unwrap();
-
-        // time for light sensor integration cycle (400ms)
-        // so above settings can be applied.
-        delay_ms(400);
-
-        let broadband_level_0 = light_sensor.visible_and_ir_raw(&mut i2c).unwrap();
-        let infrared_level_1 = light_sensor.ir_raw(&mut i2c).unwrap();
-        let lux_level = into_lux(
-            broadband_level_0,
-            infrared_level_1,
-            integration_time,
-            gain,
-            PackageCoefficient::T,
-        );
-
-        // good morning angels, lets go outside (in the sunshine).
-        if lux_level >= lux_to_open {
-            servo_pin.set_duty(servo_open)
+        // open cat door if it should be open, otherwise close.
+        // These values specific to SG90 servo, experiment to find your ones.
+        if duration >= OPEN && duration <= CLOSE {
+            // move to highest position
+            tc1.ocr1a.write(|w| w.bits(650));
+        } else {
+            // move to lowest position
+            tc1.ocr1a.write(|w| w.bits(65));
         }
 
-        // come inside, angels. It's getting dark..
-        if lux_level <= lux_to_close {
-            servo_pin.set_duty(servo_close);
-        }
+        tc1.icr1.write(|w| w.bits(4999));
+        tc1.tccr1a
+            .write(|w| w.wgm1().bits(0b10).com1a().match_clear());
+        tc1.tccr1b
+            .write(|w| w.wgm1().bits(0b11).cs1().prescale_64());
+        // Give the servo time to adjust
+        delay_ms(1000);
 
-        // enabling/disabling in loop to save power.
-        light_sensor.power_off(&mut i2c).unwrap();
-        servo_pin.disable();
+        // servo.disable()
+        tc1.tccr1a
+            .write(|w| w.wgm1().bits(0b10).com1a().disconnected());
 
-        delay_minutes(5);
+        // Increment duration by the delay
+        duration.0 += DELAY_MINUTES as u32;
+        delay_minutes(DELAY_MINUTES as usize);
+    }
+}
+
+fn delay_minutes(minutes: usize) {
+    for _ in 0..minutes {
+        delay_ms(60_000)
     }
 }

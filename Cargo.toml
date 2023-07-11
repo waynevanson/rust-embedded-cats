@@ -13,13 +13,18 @@ bench = false
 [dependencies]
 panic-halt = "0.2.0"
 embedded-hal = "0.2.3"
-num = { version = "0.4.0", default-features = false, features = ["libm"] }
-tsl256x = "0.1.0"
+embedded-time = "0.12.1"
+ufmt = "0.2.0"
 
 [dependencies.arduino-hal]
 git = "https://github.com/rahix/avr-hal"
 rev = "7dfa6d322b9df98b2d98afe0e14a97afe0187ac1"
 features = ["trinket-pro"]
+
+[dependencies.num]
+version = "0.4.0"
+default-features = false
+features = ["libm"]
 
 
 # Configure the build for minimal size - AVRs have very little program memory
