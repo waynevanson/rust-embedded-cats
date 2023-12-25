@@ -1,9 +1,12 @@
 #![no_std]
 #![no_main]
 
+mod servo;
+
 use arduino_hal::{delay_ms, entry, pins, Peripherals};
 use embedded_time::duration::{Hours, Minutes};
 use panic_halt as _;
+use servo::ServoTimer1Pwm;
 
 const OPEN: Hours = Hours(8);
 const CLOSE: Hours = Hours(14);
@@ -21,42 +24,30 @@ fn main() -> ! {
     let pins = pins!(peripherals);
 
     // IMPORTANT - sets a DDR register.
-    pins.d9.into_output();
 
-    let tc1 = peripherals.TC1;
+    let servo = ServoTimer1Pwm::new(pins.d9.into_output(), peripherals.TC1);
 
     // duration, keep track of how far into the day we are,
     // starting at midnight.
     let mut duration: Minutes = Minutes(0);
 
     loop {
-        // Set up PWM that is compatible with servo motor.
-        // This is usually implemented within a struct like `Timer[n]Pwm`,
-        // but we'll apply it manually here.
-        //
-        // servo.enable()
-
         // open cat door if it should be open, otherwise close.
         // These values specific to SG90 servo, experiment to find your ones.
         if duration >= OPEN && duration <= CLOSE {
             // move to highest position
-            tc1.ocr1a.write(|w| w.bits(650));
+            servo.set_duty(650);
         } else {
             // move to lowest position
-            tc1.ocr1a.write(|w| w.bits(65));
+            servo.set_duty(65);
         }
 
-        tc1.icr1.write(|w| w.bits(4999));
-        tc1.tccr1a
-            .write(|w| w.wgm1().bits(0b10).com1a().match_clear());
-        tc1.tccr1b
-            .write(|w| w.wgm1().bits(0b11).cs1().prescale_64());
+        servo.enable();
+
         // Give the servo time to adjust
         delay_ms(1000);
 
-        // servo.disable()
-        tc1.tccr1a
-            .write(|w| w.wgm1().bits(0b10).com1a().disconnected());
+        servo.disable();
 
         // Increment duration by the delay
         duration.0 += DELAY_MINUTES as u32;
